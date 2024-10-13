@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dijkstra's Algorithm Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            width: 100%;
+            text-align: center;
+            padding: 20px 0;
+            margin: 0;
+        }
+        #container {
+            display: flex;
+            flex-direction: row;
+            margin: 20px;
+        }
+        #graph-container {
+            position: relative;
+            flex: 1;
+        }
+        #graph {
+            border: 1px solid #ccc;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        #info-panel {
+            margin-left: 20px;
+            max-width: 400px;
+            flex: 0.5;
+        }
+        #controls {
+            margin: 20px;
+            text-align: center;
+        }
+        #controls button {
+            margin-right: 10px;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #cost-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        #cost-table th, #cost-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+        }
+        #cost-table th {
+            background-color: #2980b9;
+            color: #fff;
+        }
+        #description {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        #pseudocode {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        #pseudocode pre {
+            background-color: #fff;
+            padding: 10px;
+            border-left: 4px solid #2980b9;
+            overflow-x: auto;
+        }
+        .node {
+            cursor: pointer;
+        }
+        .node circle {
+            transition: fill 0.3s;
+        }
+        .edge {
+            transition: stroke 0.3s, stroke-width 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Dijkstra's Algorithm Visualization</h1>
+
+<div id="controls">
+    <button onclick="startAlgorithm()">Start Algorithm</button>
+    <button onclick="stepAlgorithm()">Step Forward</button>
+    <button onclick="resetAlgorithm()">Reset</button>
+</div>
+
+<div id="container">
+    <div id="graph-container">
+        <svg id="graph" width="800" height="600"></svg>
+    </div>
+    <div id="info-panel">
+        <table id="cost-table">
+            <tr>
+                <th>Node</th>
+                <th>Distance from Start</th>
+                <th>Previous Node</th>
+            </tr>
+        </table>
+        <div id="description">
+            <h2>Algorithm Steps:</h2>
+            <p id="step-description">Click "Start Algorithm" or "Step Forward" to begin.</p>
+        </div>
+        <div id="pseudocode">
+            <h2>Pseudocode:</h2>
+            <pre>
+Initialize distances to all nodes as infinity, except the start node with distance 0.
+Set all nodes as unvisited.
+While there are unvisited nodes:
+    Select the unvisited node with the smallest known distance.
+    For each of its unvisited neighbors:
+        Calculate tentative distance through the current node.
+        If tentative distance is less than the known distance:
+            Update the distance and set the previous node.
+    Mark the current node as visited.
+            </pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Graph data with more nodes and edges
+    const nodes = [
+        { id: 'A', x: 100, y: 300 },
+        { id: 'B', x: 200, y: 100 },
+        { id: 'C', x: 200, y: 500 },
+        { id: 'D', x: 350, y: 200 },
+        { id: 'E', x: 350, y: 400 },
+        { id: 'F', x: 500, y: 100 },
+        { id: 'G', x: 500, y: 500 },
+        { id: 'H', x: 650, y: 300 },
+        { id: 'I', x: 500, y: 300 },
+        { id: 'J', x: 350, y: 300 }
+    ];
+
+    const edges = [
+        { from: 'A', to: 'B', weight: 4 },
+        { from: 'A', to: 'C', weight: 2 },
+        { from: 'B', to: 'D', weight: 5 },
+        { from: 'C', to: 'E', weight: 3 },
+        { from: 'D', to: 'F', weight: 1 },
+        { from: 'E', to: 'G', weight: 6 },
+        { from: 'F', to: 'H', weight: 2 },
+        { from: 'G', to: 'H', weight: 1 },
+        { from: 'D', to: 'J', weight: 2 },
+        { from: 'E', to: 'J', weight: 4 },
+        { from: 'J', to: 'I', weight: 3 },
+        { from: 'I', to: 'H', weight: 2 },
+        { from: 'F', to: 'I', weight: 7 },
+        { from: 'G', to: 'I', weight: 3 }
+    ];
+
+    const svg = document.getElementById('graph');
+    const stepDescription = document.getElementById('step-description');
+    const costTable = document.getElementById('cost-table');
+
+    let unvisited = new Set();
+    let distances = {};
+    let previous = {};
+    let currentNode = null;
+    let stepInterval = null;
+    let visitedNodes = new Set();
+    let stepsQueue = [];
+
+    // Draw graph
+    function drawGraph() {
+        // Draw edges
+        edges.forEach(edge => {
+            const fromNode = nodes.find(n => n.id === edge.from);
+            const toNode = nodes.find(n => n.id === edge.to);
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', fromNode.x);
+            line.setAttribute('y1', fromNode.y);
+            line.setAttribute('x2', toNode.x);
+            line.setAttribute('y2', toNode.y);
+            line.setAttribute('stroke', '#999');
+            line.setAttribute('stroke-width', '2');
+            line.setAttribute('class', 'edge');
+            line.setAttribute('id', `edge-${fromNode.id}-${toNode.id}`);
+            svg.appendChild(line);
+
+            // Edge weight label
+            const midX = (fromNode.x + toNode.x) / 2;
+            const midY = (fromNode.y + toNode.y) / 2;
+            const weightText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            weightText.setAttribute('x', midX);
+            weightText.setAttribute('y', midY - 5);
+            weightText.setAttribute('fill', '#555');
+            weightText.setAttribute('font-size', '12');
+            weightText.setAttribute('text-anchor', 'middle');
+            weightText.textContent = edge.weight;
+            svg.appendChild(weightText);
+        });
+
+        // Draw nodes
+        nodes.forEach(node => {
+            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            group.setAttribute('class', 'node');
+            group.setAttribute('id', `node-${node.id}`);
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', node.x);
+            circle.setAttribute('cy', node.y);
+            circle.setAttribute('r', 20);
+            circle.setAttribute('fill', '#fff');
+            circle.setAttribute('stroke', '#333');
+            circle.setAttribute('stroke-width', '2');
+            group.appendChild(circle);
+
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', node.x);
+            text.setAttribute('y', node.y + 5);
+            text.setAttribute('fill', '#000');
+            text.setAttribute('font-size', '16');
+            text.setAttribute('text-anchor', 'middle');
+            text.textContent = node.id;
+            group.appendChild(text);
+
+            svg.appendChild(group);
+        });
+    }
+
+    // Initialize algorithm
+    function initAlgorithm() {
+        unvisited = new Set(nodes.map(n => n.id));
+        distances = {};
+        previous = {};
+        visitedNodes = new Set();
+        stepsQueue = [];
+
+        nodes.forEach(node => {
+            distances[node.id] = Infinity;
+            previous[node.id] = null;
+        });
+
+        // Set starting node
+        currentNode = 'A';
+        distances[currentNode] = 0;
+
+        updateCostTable();
+    }
+
+    // Start algorithm
+    function startAlgorithm() {
+        resetAlgorithm();
+        initAlgorithm();
+        stepDescription.textContent = 'Starting Dijkstra\'s Algorithm from node A.';
+        stepInterval = setInterval(runStep, 1000);
+    }
+
+    // Step through the algorithm
+    function stepAlgorithm() {
+        if (!stepInterval) {
+            if (unvisited.size === 0 && !currentNode) {
+                resetAlgorithm();
+                initAlgorithm();
+            }
+            runStep();
+        }
+    }
+
+    function runStep() {
+        if (unvisited.size === 0) {
+            if (stepInterval) clearInterval(stepInterval);
+            stepDescription.textContent = 'Algorithm completed. Shortest path highlighted in green.';
+            highlightShortestPath();
+            currentNode = null;
+            return;
+        }
+
+        // Find unvisited node with smallest distance
+        let minDistance = Infinity;
+        let minNode = null;
+        unvisited.forEach(nodeId => {
+            if (distances[nodeId] < minDistance) {
+                minDistance = distances[nodeId];
+                minNode = nodeId;
+            }
+        });
+
+        if (minDistance === Infinity) {
+            if (stepInterval) clearInterval(stepInterval);
+            stepDescription.textContent = 'No accessible unvisited nodes remaining.';
+            currentNode = null;
+            return;
+        }
+
+        currentNode = minNode;
+
+        // Remove current node from unvisited and add to visited
+        unvisited.delete(currentNode);
+        visitedNodes.add(currentNode);
+
+        // Update visualization
+        highlightNode(currentNode, '#3498db');
+        stepDescription.textContent = `Visiting node ${currentNode}.`;
+
+        // Update distances to neighbors
+        const neighbors = edges.filter(e => e.from === currentNode || e.to === currentNode);
+        neighbors.forEach(edge => {
+            const neighborId = edge.from === currentNode ? edge.to : edge.from;
+            if (unvisited.has(neighborId)) {
+                const alt = distances[currentNode] + edge.weight;
+                if (alt < distances[neighborId]) {
+                    distances[neighborId] = alt;
+                    previous[neighborId] = currentNode;
+
+                    // Visual indication of updated node
+                    highlightNode(neighborId, '#f1c40f');
+
+                    // Highlight edge
+                    highlightEdge(currentNode, neighborId, '#f1c40f');
+
+                    stepDescription.textContent = `Updated distance for node ${neighborId} to ${alt} via node ${currentNode}.`;
+                }
+            }
+        });
+
+        updateCostTable();
+    }
+
+    // Highlight node
+    function highlightNode(nodeId, color) {
+        const nodeGroup = document.getElementById(`node-${nodeId}`);
+        const circle = nodeGroup.querySelector('circle');
+        circle.setAttribute('fill', color);
+    }
+
+    // Highlight edge
+    function highlightEdge(nodeId1, nodeId2, color) {
+        const edgeId1 = `edge-${nodeId1}-${nodeId2}`;
+        const edgeId2 = `edge-${nodeId2}-${nodeId1}`;
+        const edge = document.getElementById(edgeId1) || document.getElementById(edgeId2);
+        if (edge) {
+            edge.setAttribute('stroke', color);
+            edge.setAttribute('stroke-width', '4');
+        }
+    }
+
+    // Highlight shortest path
+    function highlightShortestPath() {
+        let pathNode = 'H';
+        highlightNode(pathNode, '#2ecc71');
+        while (previous[pathNode]) {
+            const fromNode = pathNode;
+            const toNode = previous[pathNode];
+
+            highlightNode(toNode, '#2ecc71');
+            highlightEdge(fromNode, toNode, '#2ecc71');
+
+            pathNode = previous[pathNode];
+        }
+    }
+
+    // Update cost table
+    function updateCostTable() {
+        // Remove old rows
+        const oldRows = costTable.querySelectorAll('tr:not(:first-child)');
+        oldRows.forEach(row => row.remove());
+
+        // Add updated rows
+        nodes.forEach(node => {
+            const row = document.createElement('tr');
+            const nodeCell = document.createElement('td');
+            nodeCell.textContent = node.id;
+            row.appendChild(nodeCell);
+
+            const distanceCell = document.createElement('td');
+            const distance = distances[node.id] === Infinity ? '∞' : distances[node.id];
+            distanceCell.textContent = distance;
+            row.appendChild(distanceCell);
+
+            const prevCell = document.createElement('td');
+            prevCell.textContent = previous[node.id] || '-';
+            row.appendChild(prevCell);
+
+            costTable.appendChild(row);
+        });
+    }
+
+    // Reset algorithm and visualization
+    function resetAlgorithm() {
+        if (stepInterval) clearInterval(stepInterval);
+        stepInterval = null;
+        svg.innerHTML = '';
+        drawGraph();
+        stepDescription.textContent = 'Click "Start Algorithm" or "Step Forward" to begin.';
+        updateCostTable();
+        currentNode = null;
+    }
+
+    // Initial draw
+    drawGraph();
+    updateCostTable();
+</script>
+
+</body>
+</html>
